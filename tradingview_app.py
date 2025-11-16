@@ -1,67 +1,75 @@
-# ÉTAPE 1 DEBUG - VÉRIFICATION DES DONNÉES UNIQUEMENT
+# ÉTAPE 1 DEBUG CORRIGÉ - AVEC USER-AGENT
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import requests
 
 st.set_page_config(page_title="DEBUG - Data Check", layout="wide")
-st.title("🔍 ÉTAPE 1 : Vérification des données brutes")
+st.title("🔍 ÉTAPE 1 : Vérification des données avec User-Agent")
 
-# Dictionnaire des symboles testés et VALIDÉS
+# Dictionnaire des symboles
 INDICES_VAL = {
+    'APPLE TEST': 'AAPL',
     'NASDAQ Composite': '^IXIC',
     'S&P 500': '^GSPC',
     'FTSE 100': '^FTSE',
     'Nikkei 225': '^N225',
     'CAC 40': '^FCHI',
     'DAX': '^GDAXI',
-    'Bitcoin': 'BTC-USD',
-    'Euro/USD': 'EURUSD=X'
+    'Bitcoin': 'BTC-USD'
 }
 
-# Menu simple
-selected = st.selectbox("Sélectionnez un indice à tester", list(INDICES_VAL.keys()))
+selected = st.selectbox("Sélectionnez un symbole", list(INDICES_VAL.keys()))
 symbol = INDICES_VAL[selected]
 
-# Téléchargement
-st.subheader(f"Téléchargement de : **{selected}**")
-st.code(f"Symbole envoyé à yfinance : {symbol}")
-
-with st.spinner('Téléchargement en cours...'):
+# ★★★ LA FONCTION QUI RÉSOLUT LE BLOCAGE ★★★
+@st.cache_data(show_spinner=False)
+def download_data(ticker, period="5d", interval="1d"):
+    """
+    FORCER USER-AGENT pour passer le blocage Streamlit Cloud
+    """
     try:
-        df = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
-        st.success("✅ Téléchargement réussi !")
+        # Crée une session avec User-Agent
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        })
+        
+        # Méthode 1 : via Ticker avec session
+        ticker_obj = yf.Ticker(ticker, session=session)
+        df = ticker_obj.history(period=period, interval=interval, timeout=30)
+        
+        # Méthode 2 : fallback si vide
+        if df.empty:
+            st.warning("Méthode 1 vide, tentative fallback...")
+            df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
+        
+        return df
+        
     except Exception as e:
-        st.error(f"❌ ERREUR : {e}")
-        df = pd.DataFrame()
+        st.error(f"❌ ERREUR CRITIQUE: {e}")
+        return pd.DataFrame()
 
-# Affichage des résultats
+# Téléchargement
+st.subheader(f"Téléchargement de : **{selected}** (`{symbol}`)")
+with st.spinner('Téléchargement...'):
+    df = download_data(symbol)
+
+# Affichage
 if df.empty:
-    st.warning("⚠️ DataFrame VIDE - Aucune donnée reçue")
+    st.warning("⚠️ DataFrame VIDE")
 else:
-    st.info(f"📊 Données reçues : **{len(df)} lignes** × **{len(df.columns)} colonnes**")
-    
-    # Vérifie les colonnes
-    st.subheader("Colonnes disponibles")
-    st.write(df.columns.tolist())
-    
-    # Affiche les premières lignes
-    st.subheader("5 premières lignes")
+    st.success(f"✅ Données reçues: {len(df)} lignes")
     st.dataframe(df.head())
-    
-    # Stats basiques
-    st.subheader("Statistiques")
-    st.write(df.describe())
+    st.write("Colonnes:", df.columns.tolist())
 
-# Bouton de diagnostic
+# Bouton test global
 if st.button("🧪 Tester TOUS les symboles"):
     results = {}
     for name, sym in INDICES_VAL.items():
-        try:
-            test_df = yf.download(sym, period="5d", interval="1d", progress=False)
-            results[name] = "✅ OK" if not test_df.empty else "❌ Vide"
-        except:
-            results[name] = "❌ Erreur"
+        test_df = download_data(sym)
+        results[name] = "✅ OK" if not test_df.empty else "❌ Vide"
     
-    st.write("Résultats du test :")
+    st.write("Résultats:")
     for k, v in results.items():
         st.write(f"{k}: {v}")
