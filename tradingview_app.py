@@ -49,26 +49,33 @@ col2.metric("24 h", f"{change:.2f} %")
 col3.metric("Volume", f"{volume:,}")
 col4.metric("RSI", f"{rsi:.1f}")
 
-# ---------- chart ----------
-fig = make_subplots(rows=3,cols=1,shared_xaxes=True,row_heights=[0.6,0.2,0.2],
-                    subplot_titles=('Prix & MA','Volume','RSI'))
-fig.add_trace(go.Candlestick(x=data.index,open=data.Open,high=data.High,
-                             low=data.Low,close=data.Close,name='Candles'),row=1,col=1)
+# ---------------  CHART  ---------------
+fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                    row_heights=[0.6, 0.2, 0.2], subplot_titles=('Prix & MA', 'Volume', 'RSI'))
+fig.add_trace(go.Candlestick(x=data.index, open=data.Open, high=data.High,
+                             low=data.Low, close=data.Close, name='Candles',
+                             increasing_line_color='#00d084', decreasing_line_color='#ff4757'), row=1, col=1)
 ma20 = data.Close.rolling(20).mean()
 ma50 = data.Close.rolling(50).mean()
-fig.add_trace(go.Scatter(x=data.index,y=ma20,name='MA20'),row=1,col=1)
-fig.add_trace(go.Scatter(x=data.index,y=ma50,name='MA50'),row=1,col=1)
+fig.add_trace(go.Scatter(x=data.index, y=ma20, name='MA20', line=dict(color='#ff6b6b')), row=1, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=ma50, name='MA50', line=dict(color='#4ecdc4')), row=1, col=1)
 
-close_v = data.Close.values
-colors  = ['green' if close_v[i] > close_v[i-1] else 'red' for i in range(1,len(close_v))]
-colors.insert(0,'green')
-fig.add_trace(go.Bar(x=data.index,y=data.Volume,name='Volume',marker_color=colors),row=2,col=1)
+close_vals = data.Close.values
+colors = ['#00d084' if close_vals[i] > close_vals[i-1] else '#ff4757' for i in range(1, len(close_vals))]
+colors.insert(0, '#00d084')
+fig.add_trace(go.Bar(x=data.index, y=data.Volume, name='Volume', marker_color=colors), row=2, col=1)
+fig.add_trace(go.Scatter(x=data.index, y=rsi, name='RSI', line=dict(color='#9b59b6')), row=3, col=1)
+fig.add_hline(y=70, line_dash='dash', line_color='#ff4757', row=3, col=1)
+fig.add_hline(y=30, line_dash='dash', line_color='#00d084', row=3, col=1)
 
-fig.add_trace(go.Scatter(x=data.index,y=100-(100/(1+gain/loss)),name='RSI'),row=3,col=1)
-fig.add_hline(y=70,line_dash='dash',line_color='red',row=3,col=1)
-fig.add_hline(y=30,line_dash='dash',line_color='green',row=3,col=1)
-fig.update_layout(height=700,template='plotly_dark',title=f'{ticker} – {tf}')
-st.plotly_chart(fig, use_container_width=True)
+fig.update_layout(height=700, template='plotly_dark', title=f"{ticker} – {tf}",
+                  xaxis_rangeslider_visible=False)
+
+# ⬇️ CORRIGÉ : utilise width="stretch" et vérifie les données
+if data.empty:
+    st.warning("Aucune donnée à afficher.")
+else:
+    st.plotly_chart(fig, width="stretch")
 
 # ---------- paper trading ----------
 st.sidebar.subheader("🧪 Paper trading")
