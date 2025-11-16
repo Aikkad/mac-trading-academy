@@ -21,8 +21,8 @@ st.markdown("""
 # ==================== SIDEBAR ====================
 st.sidebar.header("⚙️ Configuration Trading")
 
-# Liste des indices avec symboles valides
-indices = {
+# Dictionnaire des indices (symboles valides)
+INDICES = {
     'NASDAQ Composite': '^IXIC',
     'S&P 500': '^GSPC',
     'FTSE 100 (Londres)': '^FTSE',
@@ -33,8 +33,13 @@ indices = {
     'Euro/USD': 'EURUSD=X'
 }
 
-market_name = st.sidebar.selectbox("📈 Choisir l'indice", list(indices.keys()))
-symbol = indices[market_name]  # Extrait le symbole propre
+# Sélection de l'indice
+market_name = st.sidebar.selectbox("📈 Choisir l'indice", list(INDICES.keys()))
+symbol = INDICES[market_name]
+
+# PÉRIODE & TIMEFRAME (défini AVANT l'utilisation)
+days = st.sidebar.slider("📅 Période historique (jours)", 5, 730, 90)
+tf = st.sidebar.selectbox("⏰ Timeframe", ['1d', '1h', '15m', '5m', '1m'], index=0)
 
 # ==================== FETCH DATA ====================
 @st.cache_data(show_spinner=False)
@@ -42,23 +47,24 @@ def download_data(ticker, period, interval):
     try:
         df = yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
         if df.empty:
-            # Essai avec un autre format
+            # Fallback si le symbole avec ^ ne marche pas
             df = yf.download(ticker.replace('^', ''), period=period, interval=interval, progress=False)
         return df
     except Exception as e:
         st.error(f"❌ Erreur téléchargement {ticker}: {e}")
         return pd.DataFrame()
 
+# TÉLÉCHARGEMENT DES DONNÉES
 data = download_data(symbol, f"{days}d", tf)
 
-# ==================== DEBUG & VERIFICATION ====================
-if data.empty:
-    st.warning(f"⚠️ Aucune donnée pour {symbol}. Vérifie le format (ex: ^IXIC, ^FTSE, BTC-USD)")
-    st.info("💡 Astuce: Pour le NASDAQ, tapez ^IXIC. Pour Bitcoin, BTC-USD")
+# ==================== VÉRIFICATION DONNÉES ====================
+if data.empty or len(data) < 10:
+    st.error(f"❌ Aucune donnée valide pour {symbol}. Essayez un autre indice.")
+    st.info("💡 Symboles valides: ^IXIC, ^GSPC, ^FTSE, ^N225, ^FCHI, ^GDAXI, BTC-USD, EURUSD=X")
     st.stop()
 
 # ==================== DASHBOARD PRINCIPAL ====================
-st.markdown(f"<div class='trading-header'><h1 style='text-align:center;'>{market_index}</h1></div>", 
+st.markdown(f"<div class='trading-header'><h1 style='text-align:center;'>{market_name}</h1></div>", 
             unsafe_allow_html=True)
 
 # Métriques
@@ -74,7 +80,7 @@ col3.metric("📈 Volume", f"{volume:,}")
 # ==================== GRAPHIQUE PRINCIPAL ====================
 st.subheader("📊 Graphique Principal")
 
-# Calcul des indicateurs
+# Indicateurs
 delta = data.Close.diff()
 gain = delta.where(delta > 0, 0).rolling(14).mean()
 loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
@@ -110,17 +116,17 @@ fig.add_hline(y=70, line_dash='dash', line_color='#ff4757', row=3, col=1)
 fig.add_hline(y=30, line_dash='dash', line_color='#00d084', row=3, col=1)
 
 fig.update_layout(
-    height=800, template='plotly_dark', title=f'{market_index} - {tf}',
+    height=800, template='plotly_dark', title=f'{market_name} - {tf}',
     xaxis_rangeslider_visible=False, hovermode='x unified'
 )
 
-# RENDU PLOTLY FIXÉ
+# RENDU FIXÉ
 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'scrollZoom': True})
 
 # ==================== ANALYSE GLOBALE 24H ====================
 st.subheader("🌍 Analyse 24H – Corrélation Marchés")
 
-# Récupération des données pour les 3 fuseaux horaires
+# Récupération des 3 indices clés
 asia = download_data('^N225', '5d', '1d')
 europe = download_data('^FTSE', '5d', '1d')
 usa = download_data('^IXIC', '5d', '1d')
@@ -131,22 +137,22 @@ with col_a:
     st.markdown("### 🌏 Asie (Nikkei)")
     if not asia.empty:
         ret_asia = float((asia.Close.iloc[-1] / asia.Close.iloc[0] - 1) * 100)
-        st.metric("Performance", f"{ret_asia:+.2f}%", delta=f"{ret_asia:+.2f}%")
+        st.metric("Performance 5j", f"{ret_asia:+.2f}%", delta=f"{ret_asia:+.2f}%")
 
 with col_e:
     st.markdown("### 🇪🇺 Europe (FTSE)")
     if not europe.empty:
         ret_eur = float((europe.Close.iloc[-1] / europe.Close.iloc[0] - 1) * 100)
-        st.metric("Performance", f"{ret_eur:+.2f}%", delta=f"{ret_eur:+.2f}%")
+        st.metric("Performance 5j", f"{ret_eur:+.2f}%", delta=f"{ret_eur:+.2f}%")
 
 with col_u:
     st.markdown("### 🇺🇸 Amérique (NASDAQ)")
     if not usa.empty:
         ret_usa = float((usa.Close.iloc[-1] / usa.Close.iloc[0] - 1) * 100)
-        st.metric("Performance", f"{ret_usa:+.2f}%", delta=f"{ret_usa:+.2f}%")
+        st.metric("Performance 5j", f"{ret_usa:+.2f}%", delta=f"{ret_usa:+.2f}%")
 
-# ==================== FUSION HORAIRE ====================
-st.subheader("🕐 Heures d'Ouverture des Marchés")
+# ==================== HORAIRES MARCHÉS ====================
+st.subheader("🕐 Heures d'Ouverture des Marchés (Temps Réel)")
 now = datetime.now(pytz.UTC)
 
 markets_info = {
@@ -172,7 +178,7 @@ if st.sidebar.button("Acheter"):
 if st.sidebar.button("Vendre"):
     st.sidebar.success(f"➖ Vente {qty} × {symbol} @ ${current:,.2f}")
 
-# ==================== BACKTEST RAPIDE ====================
+# ==================== BACKTEST ====================
 st.sidebar.subheader("📈 Backtest Simple")
 fast = st.sidebar.slider("MA Rapide", 5, 50, 20)
 slow = st.sidebar.slider("MA Lente", 20, 200, 50)
