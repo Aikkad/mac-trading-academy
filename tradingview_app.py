@@ -21,20 +21,20 @@ st.markdown("""
 # ==================== SIDEBAR ====================
 st.sidebar.header("⚙️ Configuration Trading")
 
-# Sélection INDICE DE MARCHÉ (ta demande principale)
-market_index = st.sidebar.selectbox(
-    "📈 Choisir l'indice principal",
-    ['NASDAQ Composite (^IXIC)', 'S&P 500 (^GSPC)', 'FTSE 100 (^FTSE)', 
-     'Nikkei 225 (^N225)', 'DAX (^GDAXI)', 'CAC 40 (^FCHI)'],
-    index=0
-)
+# Liste des indices avec symboles valides
+indices = {
+    'NASDAQ Composite': '^IXIC',
+    'S&P 500': '^GSPC',
+    'FTSE 100 (Londres)': '^FTSE',
+    'Nikkei 225 (Tokyo)': '^N225',
+    'CAC 40 (Paris)': '^FCHI',
+    'DAX (Francfort)': '^GDAXI',
+    'Bitcoin': 'BTC-USD',
+    'Euro/USD': 'EURUSD=X'
+}
 
-# Extraction du symbole
-symbol = market_index.split('(')[-1].replace(')', '')
-
-# Timeframe et période
-tf = st.sidebar.selectbox("⏰ Timeframe", ['1d', '1h', '15m', '5m', '1m'], index=0)
-days = st.sidebar.slider("📅 Période historique (jours)", 5, 730, 90)
+market_name = st.sidebar.selectbox("📈 Choisir l'indice", list(indices.keys()))
+symbol = indices[market_name]  # Extrait le symbole propre
 
 # ==================== FETCH DATA ====================
 @st.cache_data(show_spinner=False)
